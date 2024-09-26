@@ -1,16 +1,13 @@
 package com.diver.authserve;
 
-import org.springframework.boot.SpringApplication;
+import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class AuthServeApplication {
+class AuthServeApplicationTests {
 
-    public static void main(String[] args) {
-        SpringApplication.run(AuthServeApplication.class, args);
-        System.out.println("Hello Worldsssss");
+    @Test
+    void contextLoads() {
     }
-
-
 
 }
