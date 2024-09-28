@@ -1,17 +1,23 @@
-package com.diver.authserve.auth;
+package com.diver.springboot.auth.server;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.UUID;
 
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -31,87 +37,86 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.util.UUID;
-
 @Configuration
-@EnableWebSecurity
 public class SecurityConfig {
 
-    // Configuración del servidor de autorización
     @Bean
     @Order(1)
     public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http)
             throws Exception {
         OAuth2AuthorizationServerConfiguration.applyDefaultSecurity(http);
         http.getConfigurer(OAuth2AuthorizationServerConfigurer.class)
-                .oidc(Customizer.withDefaults()); // Habilitar OpenID Connect 1.0
+                .oidc(Customizer.withDefaults());	// Enable OpenID Connect 1.0
         http
+                // Redirect to the login page when not authenticated from the
+                // authorization endpoint
                 .exceptionHandling((exceptions) -> exceptions
                         .defaultAuthenticationEntryPointFor(
                                 new LoginUrlAuthenticationEntryPoint("/login"),
                                 new MediaTypeRequestMatcher(MediaType.TEXT_HTML)
                         )
                 )
-                .oauth2ResourceServer(resourceServer -> resourceServer
-                        .jwt(Customizer.withDefaults())); // Configurar el servidor de recursos para aceptar JWT
+                // Accept access tokens for User Info and/or Client Registration
+                .oauth2ResourceServer((resourceServer) -> resourceServer
+                        .jwt(Customizer.withDefaults()));
 
         return http.build();
     }
 
-    // Configuración de seguridad para las demás rutas
     @Bean
     @Order(2)
     public SecurityFilterChain defaultSecurityFilterChain(HttpSecurity http)
             throws Exception {
         http
-                .authorizeHttpRequests(authorize -> authorize
-                        .anyRequest().authenticated() // Requiere autenticación para cualquier solicitud
+                .authorizeHttpRequests((authorize) -> authorize
+                        .anyRequest().authenticated()
                 )
-                .csrf(csrf -> csrf.disable()) // Deshabilitar CSRF
-                .formLogin(Customizer.withDefaults()); // Manejar el inicio de sesión con formularios
+                // Form login handles the redirect to the login page from the
+                // authorization server filter chain
+                .csrf(csrf -> csrf.disable())
+                .formLogin(Customizer.withDefaults());
 
         return http.build();
     }
 
-    // Servicio de detalles de usuario (almacena un usuario en memoria)
+//    @Bean
+//    private PasswordEncoder passwordEncoder() {
+//        return new BCryptPasswordEncoder();
+//    }
+
     @Bean
     public UserDetailsService userDetailsService() {
         UserDetails userDetails = User.builder()
-                .username("diver")
-                .password("{noop}12345") // {noop} para contraseñas sin encriptar
-                .roles("USER") // Rol del usuario
+                .username("pepe")
+//                .password(passwordEncoder().encode("password"))
+                .password("{noop}12345")
+                .roles("USER")
                 .build();
 
-        return new InMemoryUserDetailsManager(userDetails); // Almacenar usuario en memoria
+        return new InMemoryUserDetailsManager(userDetails);
     }
 
-    // Registro del cliente OAuth2 en memoria
     @Bean
     public RegisteredClientRepository registeredClientRepository() {
         RegisteredClient oidcClient = RegisteredClient.withId(UUID.randomUUID().toString())
-                .clientId("client-app")
-                .clientSecret("{noop}12345") // Usar sin encriptar para pruebas
+                .clientId("frontend-app")
+                .clientSecret("{noop}12345")
                 .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
                 .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
-                .redirectUri("http://127.0.0.1:8091/login/oauth2/code/client-app")
-                .redirectUri("http://127.0.0.1:8091/authorized")
-                .postLogoutRedirectUri("http://127.0.0.1:8080/logout")
-                .scope("read")
-                .scope("write")
+                .redirectUri("http://127.0.0.1:8001/login/oauth2/code/client-app")
+                .redirectUri("http://127.0.0.1:8001/authorized")
+                .postLogoutRedirectUri("http://127.0.0.1:8001/logout")
                 .scope(OidcScopes.OPENID)
                 .scope(OidcScopes.PROFILE)
-                .clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
+                .scope("read")
+                .scope("write")
+                .clientSettings(ClientSettings.builder().requireAuthorizationConsent(false).build())
                 .build();
 
-        return new InMemoryRegisteredClientRepository(oidcClient); // Almacenar cliente en memoria
+        return new InMemoryRegisteredClientRepository(oidcClient);
     }
 
-    // Fuente de claves JWK para JWT
     @Bean
     public JWKSource<SecurityContext> jwkSource() {
         KeyPair keyPair = generateRsaKey();
@@ -125,26 +130,27 @@ public class SecurityConfig {
         return new ImmutableJWKSet<>(jwkSet);
     }
 
-    // Generación de la clave RSA
     private static KeyPair generateRsaKey() {
+        KeyPair keyPair;
         try {
             KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
             keyPairGenerator.initialize(2048);
-            return keyPairGenerator.generateKeyPair(); // Retornar par de claves generado
-        } catch (Exception ex) {
+            keyPair = keyPairGenerator.generateKeyPair();
+        }
+        catch (Exception ex) {
             throw new IllegalStateException(ex);
         }
+        return keyPair;
     }
 
-    // Decodificador JWT
     @Bean
     public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
         return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
     }
 
-    // Configuración del servidor de autorización
     @Bean
     public AuthorizationServerSettings authorizationServerSettings() {
-        return AuthorizationServerSettings.builder().build(); // Configuración predeterminada del servidor de autorización
+        return AuthorizationServerSettings.builder().build();
     }
+
 }

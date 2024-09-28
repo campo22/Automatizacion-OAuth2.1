@@ -1,13 +1,13 @@
-package com.diver.authserve;
+package com.andres.springboot.auth.server;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class AuthServeApplicationTests {
+class AuthServerApplicationTests {
 
-    @Test
-    void contextLoads() {
-    }
+	@Test
+	void contextLoads() {
+	}
 
 }
